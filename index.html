@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ModStore - المتجر الشامل</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: { extend: { colors: { darkBg: '#0f172a', cardBg: '#1e293b' } } }
+        }
+    </script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;900&display=swap" rel="stylesheet">
+    <style> body { font-family: 'Cairo', sans-serif; } </style>
+</head>
+<body class="bg-darkBg text-slate-100 min-h-screen flex flex-col antialiased">
+
+    <!-- Header -->
+    <header class="sticky top-0 z-40 bg-darkBg/90 backdrop-blur-md border-b border-slate-800">
+        <div class="max-w-7xl mx-auto px-3 h-16 flex items-center justify-between gap-2">
+            <a href="#" onclick="navigate('home')" class="flex items-center gap-1.5 text-base font-black text-white shrink-0">
+                <div class="w-8 h-8 rounded-xl bg-indigo-600 flex items-center justify-center shadow-lg shadow-indigo-500/30">
+                    <i class="fa-solid fa-gamepad text-white text-xs"></i>
+                </div>
+                <span>Mod<span class="text-indigo-500">Store</span></span>
+            </a>
+
+            <!-- Search Bar -->
+            <div class="flex-1 max-w-xs relative">
+                <i class="fa-solid fa-magnifying-glass absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
+                <input type="text" id="searchInput" oninput="handleSearch(this.value)" placeholder="ابحث في المتجر..." class="w-full bg-slate-900 border border-slate-700/80 rounded-full py-1.5 pr-8 pl-3 text-[11px] text-white focus:outline-none focus:border-indigo-500">
+            </div>
+
+            <!-- Profile & Login -->
+            <div id="authHeaderButtons" class="flex items-center gap-2 shrink-0">
+                <button onclick="loginWithTelegram()" class="bg-sky-600 hover:bg-sky-500 text-white px-3.5 py-1.5 rounded-full text-xs font-bold transition flex items-center gap-1.5 shadow-md">
+                    <i class="fa-brands fa-telegram"></i> دخول
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="flex-1 max-w-7xl w-full mx-auto px-4 py-6">
+        
+        <!-- HOME VIEW -->
+        <div id="homeView" class="space-y-6">
+
+            <!-- Categories Bar -->
+            <div class="flex items-center gap-2 overflow-x-auto pb-2">
+                <button onclick="filterCategory('all')" class="cat-btn active px-4 py-2 rounded-xl text-xs font-bold bg-indigo-600 text-white transition whitespace-nowrap">الكل</button>
+                <button onclick="filterCategory('apk')" class="cat-btn px-4 py-2 rounded-xl text-xs font-bold bg-slate-800 text-slate-300 hover:bg-slate-700 transition whitespace-nowrap"><i class="fa-brands fa-android ml-1"></i> ألعاب وتطبيقات</button>
+                <button onclick="filterCategory('quran')" class="cat-btn px-4 py-2 rounded-xl text-xs font-bold bg-slate-800 text-slate-300 hover:bg-slate-700 transition whitespace-nowrap"><i class="fa-solid fa-headphones-simple ml-1"></i> قرآن وأناشيد (معاينة)</button>
+            </div>
+
+            <!-- Apps Grid -->
+            <div>
+                <h2 class="text-base font-bold mb-3 flex items-center gap-2">
+                    <i class="fa-solid fa-fire text-amber-500"></i> القائمة العامة للمحتوى
+                </h2>
+                <div id="appsGrid" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+                    <div class="col-span-full text-center py-10 text-slate-400 text-sm">جاري جلب المحتوى...</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- DETAIL VIEW WITH PREVIEW PLAYER -->
+        <div id="detailView" class="hidden space-y-5">
+            <button onclick="navigate('home')" class="inline-flex items-center gap-2 text-slate-400 hover:text-white transition font-semibold text-xs">
+                <i class="fa-solid fa-arrow-right"></i> العودة للمتجر
+            </button>
+            <div id="appDetailContent"></div>
+        </div>
+
+    </main>
+
+    <!-- FIREBASE & APP SCRIPT -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+        import { getFirestore, collection, getDocs, doc, getDoc, updateDoc, increment } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyDujZqLLN3nfSybLKSJavNTSBG0Bv7Lq0U",
+            authDomain: "aemnstore.firebaseapp.com",
+            projectId: "aemnstore",
+            storageBucket: "aemnstore.firebasestorage.app",
+            messagingSenderId: "418588320744",
+            appId: "1:418588320744:web:50749f1cd6e87e8c01ba5d"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+
+        let currentUser = null;
+        let allItems = [];
+
+        const savedTgUser = localStorage.getItem('tg_user');
+        if (savedTgUser) {
+            currentUser = JSON.parse(savedTgUser);
+            updateHeaderUI();
+        }
+
+        window.loginWithTelegram = () => {
+            const tgName = prompt("أدخل اسمك في تيليجرام:", "Aemn");
+            if(tgName) {
+                currentUser = { name: tgName, photoUrl: "https://upload.wikimedia.org/wikipedia/commons/8/82/Telegram_logo.svg" };
+                localStorage.setItem('tg_user', JSON.stringify(currentUser));
+                updateHeaderUI();
+            }
+        };
+
+        function updateHeaderUI() {
+            const btnArea = document.getElementById('authHeaderButtons');
+            if (currentUser) {
+                btnArea.innerHTML = `
+                    <div class="flex items-center gap-2 bg-slate-800 border border-slate-700 px-3 py-1 rounded-full">
+                        <span class="text-xs font-bold text-white">${currentUser.name}</span>
+                    </div>
+                `;
+            }
+        }
+
+        window.navigate = (view) => {
+            document.getElementById('homeView').classList.add('hidden');
+            document.getElementById('detailView').classList.add('hidden');
+            if(view === 'home') document.getElementById('homeView').classList.remove('hidden');
+            if(view === 'detail') document.getElementById('detailView').classList.remove('hidden');
+            window.scrollTo({top:0, behavior:'smooth'});
+        };
+
+        async function loadApps() {
+            const grid = document.getElementById('appsGrid');
+            try {
+                const snap = await getDocs(collection(db, "apps"));
+                allItems = [];
+                snap.forEach(d => allItems.push({ id: d.id, ...d.data() }));
+                renderAppsGrid(allItems);
+            } catch(e) {
+                grid.innerHTML = `<div class="col-span-full text-center text-red-400 text-xs">حدث خطأ أثناء تحميل البيانات</div>`;
+            }
+        }
+
+        window.handleSearch = (q) => {
+            const filtered = allItems.filter(i => i.title.toLowerCase().includes(q.toLowerCase()));
+            renderAppsGrid(filtered);
+        };
+
+        window.filterCategory = (type) => {
+            document.querySelectorAll('.cat-btn').forEach(btn => btn.classList.remove('bg-indigo-600', 'text-white'));
+            const filtered = type === 'all' ? allItems : allItems.filter(i => i.type === type);
+            renderAppsGrid(filtered);
+        };
+
+        function renderAppsGrid(items) {
+            const grid = document.getElementById('appsGrid');
+            if(items.length === 0) {
+                grid.innerHTML = `<div class="col-span-full text-center py-10 text-slate-400 text-xs">لا توجد عناصر حالياً</div>`;
+                return;
+            }
+
+            grid.innerHTML = items.map(item => `
+                <div onclick="viewAppDetail('${item.id}')" class="bg-cardBg border border-slate-800 rounded-2xl p-3.5 cursor-pointer hover:border-indigo-500 transition shadow-lg flex items-center justify-between">
+                    <div class="flex items-center gap-3 overflow-hidden">
+                        <img src="${item.iconUrl}" class="w-12 h-12 rounded-2xl object-cover bg-slate-900 shrink-0">
+                        <div class="overflow-hidden">
+                            <h3 class="font-bold text-white text-xs truncate">${item.title}</h3>
+                            <p class="text-[10px] text-indigo-400 font-semibold truncate mt-0.5">${item.type === 'quran' ? '🎵 قرآن / أنشودة' : '📱 تطبيق / لعبة'}</p>
+                            <span class="text-[9px] text-emerald-400 font-bold block mt-1"><i class="fa-solid fa-download ml-0.5"></i> ${item.downloads || 0} تنزيل</span>
+                        </div>
+                    </div>
+                    <i class="fa-solid fa-chevron-left text-slate-500 text-xs"></i>
+                </div>
+            `).join('');
+        }
+
+        window.viewAppDetail = async (id) => {
+            navigate('detail');
+            const docSnap = await getDoc(doc(db, "apps", id));
+            const item = docSnap.data();
+
+            let previewSection = '';
+            if (item.type === 'quran' && item.apkUrl) {
+                previewSection = `
+                    <div class="bg-slate-900 p-4 rounded-2xl border border-purple-500/30 space-y-3 text-center">
+                        <h3 class="text-xs font-bold text-purple-300"><i class="fa-solid fa-headphones ml-1"></i> استمع للمعاينة الصوتية</h3>
+                        <audio controls class="w-full">
+                            <source src="${item.apkUrl}" type="audio/mpeg">
+                        </audio>
+                    </div>
+                `;
+            }
+
+            document.getElementById('appDetailContent').innerHTML = `
+                <div class="bg-cardBg border border-slate-800 rounded-3xl p-6 space-y-6">
+                    <div class="flex items-center gap-4">
+                        <img src="${item.iconUrl}" class="w-20 h-20 rounded-2xl object-cover shadow-2xl bg-slate-900">
+                        <div>
+                            <h1 class="text-xl font-black text-white">${item.title}</h1>
+                            <span class="text-emerald-400 text-xs font-bold block mt-2"><i class="fa-solid fa-download ml-1"></i>${item.downloads || 0} تنزيل</span>
+                        </div>
+                    </div>
+
+                    ${previewSection}
+
+                    <div class="bg-slate-900 p-4 rounded-2xl border border-slate-800 text-center">
+                        <a href="${item.apkUrl || '#'}" target="_blank" onclick="incrementDown('${id}')" class="block w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3 rounded-xl text-xs shadow-lg transition">
+                            <i class="fa-solid fa-download ml-1"></i> تحميل مباشر
+                        </a>
+                    </div>
+
+                    <div class="space-y-2">
+                        <h3 class="text-sm font-bold text-white">الوصف</h3>
+                        <p class="text-slate-300 text-xs leading-relaxed bg-slate-900/60 p-4 rounded-2xl border border-slate-800">${item.description}</p>
+                    </div>
+                </div>
+            `;
+        };
+
+        window.incrementDown = async (id) => {
+            await updateDoc(doc(db, "apps", id), { downloads: increment(1) });
+        };
+
+        loadApps();
+    </script>
+</body>
+</html>
